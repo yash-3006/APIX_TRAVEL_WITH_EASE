@@ -1,0 +1,211 @@
+import { jsPDF } from 'jspdf';
+import {
+  AirlineComparisonRow,
+  FareBand,
+  RouteRecord,
+  TrendPoint,
+} from '../types/apix';
+
+export interface PdfReportPayload {
+  route: RouteRecord;
+  periodLabel: string;
+  reportType: string;
+  generatedBy: string;
+  avgFare: number;
+  minFare: number;
+  maxFare: number;
+  priceIndex: number;
+  band: FareBand;
+  trendPoints: TrendPoint[];
+  airlineRows: AirlineComparisonRow[];
+}
+
+function pdfINR(val: number): string {
+  return `INR ${Math.round(val).toLocaleString('en-IN')}`;
+}
+
+export function downloadAirfarePdfReport(payload: PdfReportPayload): string {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let y = 18;
+
+  // Header bar
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, pageWidth, 34, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('APIX — Airfare Price Index Report', 14, 15);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(203, 213, 225);
+  doc.text(
+    `${payload.reportType}  |  Route: ${payload.route.sourceCode} (${payload.route.sourceCity}) -> ${payload.route.destinationCode} (${payload.route.destinationCity})`,
+    14,
+    23
+  );
+  doc.text(
+    `Period: ${payload.periodLabel}  |  Generated: ${new Date().toLocaleDateString('en-IN')}  |  Prepared for: ${payload.generatedBy}`,
+    14,
+    29
+  );
+
+  y = 44;
+
+  // Summary KPIs
+  doc.setTextColor(15, 23, 42);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('1. Executive Fare Summary', 14, y);
+  y += 6;
+
+  const boxWidth = (pageWidth - 28 - 9) / 4;
+  const kpis = [
+    { label: 'Average Fare', value: pdfINR(payload.avgFare) },
+    { label: 'Lowest Fare', value: pdfINR(payload.minFare) },
+    { label: 'Highest Fare', value: pdfINR(payload.maxFare) },
+    { label: 'Price Index', value: `${payload.priceIndex} (${payload.band})` },
+  ];
+
+  kpis.forEach((kpi, idx) => {
+    const x = 14 + idx * (boxWidth + 3);
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, y, boxWidth, 18, 2, 2, 'FD');
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(kpi.label, x + 3, y + 6);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(kpi.value, x + 3, y + 13.5);
+  });
+
+  y += 28;
+
+  // Airline Comparison Table
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42);
+  doc.text('2. Airline Fare Comparison', 14, y);
+  y += 5;
+
+  doc.setFillColor(241, 245, 249);
+  doc.rect(14, y, pageWidth - 28, 8, 'F');
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text('Airline', 16, y + 5.5);
+  doc.text('Type', 58, y + 5.5);
+  doc.text('Lowest', 90, y + 5.5);
+  doc.text('Average', 115, y + 5.5);
+  doc.text('Highest', 140, y + 5.5);
+  doc.text('Index / Band', 165, y + 5.5);
+  y += 10;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(15, 23, 42);
+  payload.airlineRows.slice(0, 8).forEach((row) => {
+    doc.text(`${row.airlineName} (${row.airlineCode})`, 16, y + 4);
+    doc.text(row.carrierType, 58, y + 4);
+    doc.text(pdfINR(row.minFare), 90, y + 4);
+    doc.text(pdfINR(row.avgFare), 115, y + 4);
+    doc.text(pdfINR(row.maxFare), 140, y + 4);
+    doc.text(`${row.priceIndex} (${row.band})`, 165, y + 4);
+    doc.setDrawColor(241, 245, 249);
+    doc.line(14, y + 6.5, pageWidth - 14, y + 6.5);
+    y += 7.5;
+  });
+
+  y += 8;
+
+  // Historical Trend Table
+  if (y > 220) {
+    doc.addPage();
+    y = 20;
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42);
+  doc.text('3. Historical Fare Trend & Index Classification', 14, y);
+  y += 5;
+
+  doc.setFillColor(241, 245, 249);
+  doc.rect(14, y, pageWidth - 28, 8, 'F');
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text('Period', 16, y + 5.5);
+  doc.text('Average Fare', 52, y + 5.5);
+  doc.text('Min Fare', 90, y + 5.5);
+  doc.text('Max Fare', 122, y + 5.5);
+  doc.text('Index', 154, y + 5.5);
+  doc.text('Classification', 172, y + 5.5);
+  y += 10;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(15, 23, 42);
+  payload.trendPoints.slice(0, 14).forEach((pt) => {
+    if (y > 275) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.text(pt.label, 16, y + 4);
+    doc.text(pdfINR(pt.avgFare), 52, y + 4);
+    doc.text(pdfINR(pt.minFare), 90, y + 4);
+    doc.text(pdfINR(pt.maxFare), 122, y + 4);
+    doc.text(String(pt.priceIndex), 154, y + 4);
+    doc.text(pt.band, 172, y + 4);
+    doc.setDrawColor(241, 245, 249);
+    doc.line(14, y + 6.5, pageWidth - 14, y + 6.5);
+    y += 7.2;
+  });
+
+  // Footer note
+  doc.setFontSize(8);
+  doc.setTextColor(100, 116, 139);
+  doc.text(
+    'Note: Simulated historical airfare index dataset generated by APIX frontend analytics prototype.',
+    14,
+    288
+  );
+
+  const fileName = `APIX-Report-${payload.route.sourceCode}-${payload.route.destinationCode}-${new Date()
+    .toISOString()
+    .slice(0, 10)}.pdf`;
+  doc.save(fileName);
+  return fileName;
+}
+
+export function downloadAirfareCsvReport(payload: PdfReportPayload): string {
+  const headers = ['Period', 'Avg Fare (INR)', 'Min Fare (INR)', 'Max Fare (INR)', 'Price Index', 'Classification', 'Records'];
+  const rows = payload.trendPoints.map((pt) => [
+    pt.label,
+    pt.avgFare,
+    pt.minFare,
+    pt.maxFare,
+    pt.priceIndex,
+    pt.band,
+    pt.recordCount,
+  ]);
+  const csv = [
+    `# APIX Airfare Report - ${payload.route.sourceCode} to ${payload.route.destinationCode} (${payload.periodLabel})`,
+    headers.join(','),
+    ...rows.map((r) => r.join(',')),
+  ].join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const fileName = `APIX-Data-${payload.route.sourceCode}-${payload.route.destinationCode}.csv`;
+  link.href = url;
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  return fileName;
+}

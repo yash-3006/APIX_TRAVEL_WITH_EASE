@@ -1,0 +1,8 @@
+{
+  "name": "Airfare Price Index (APIX)",
+  "description": "Airline fare analytics dashboard for searching flights, comparing carrier fares, analyzing historical price index trends, and generating downloadable reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
